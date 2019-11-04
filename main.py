@@ -17,6 +17,7 @@ this. I'm needing to read them to get a better idea of what I need to do to diff
 as build upon already "proven" methods.
     [1] "Stochastic MAB Problem with Non-stationary Rewards": https://papers.nips.cc/paper/5378-stochastic-multi-armed-bandit-problem-with-non-stationary-rewards.pdf
     [2] "Rotting Bandits": https://arxiv.org/pdf/1702.07274.pdf
+    [3] "Rotting bandits are no harder than stochastic ones": https://arxiv.org/pdf/1811.11043.pdf
     [3] "Efficient Contextual Bandits in Non-Stationary Worlds": https://arxiv.org/pdf/1708.01799.pdf
     [4] "Contextual GP Bandit Optimization": http://www.ong-home.my/papers/krause11cgp-ucb.pdf
 
@@ -28,5 +29,6 @@ Notes:
             One potential idea is EWS: https://twitter.com/eigenikos/status/1191279528875741185?s=20
             Another idea is Rexp3 from [1] above -- There may need to be some adjustments made to make this "contextual"
             SWA for the Non-parametric case presented in [2]
+            FEWA from [3]
       
 '''
