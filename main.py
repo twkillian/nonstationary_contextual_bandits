@@ -18,8 +18,9 @@ as build upon already "proven" methods.
     [1] "Stochastic MAB Problem with Non-stationary Rewards": https://papers.nips.cc/paper/5378-stochastic-multi-armed-bandit-problem-with-non-stationary-rewards.pdf
     [2] "Rotting Bandits": https://arxiv.org/pdf/1702.07274.pdf
     [3] "Rotting bandits are no harder than stochastic ones": https://arxiv.org/pdf/1811.11043.pdf
-    [3] "Efficient Contextual Bandits in Non-Stationary Worlds": https://arxiv.org/pdf/1708.01799.pdf
-    [4] "Contextual GP Bandit Optimization": http://www.ong-home.my/papers/krause11cgp-ucb.pdf
+    [4] "Efficient Contextual Bandits in Non-Stationary Worlds": https://arxiv.org/pdf/1708.01799.pdf
+    [5] "Contextual GP Bandit Optimization": http://www.ong-home.my/papers/krause11cgp-ucb.pdf
+    [6] "A Contextual Bandit Alg for Ad Creative under Ad Fatigue": https://arxiv.org/pdf/1908.08936.pdf
 
  Nov. 2019 by Taylor Killian, University of Toronto
 ----------------------------------------------------------------------------------------
@@ -30,5 +31,12 @@ Notes:
             Another idea is Rexp3 from [1] above -- There may need to be some adjustments made to make this "contextual"
             SWA for the Non-parametric case presented in [2]
             FEWA from [3]
+            Consider adding in fatigue terms as done in [6]
+
+11 Nov 2019 -- Further notes:
+            It's pretty clear that [1-3] are non-contextual settings. One potential contribution that I can make is in applying 
+            these ideas to contextual settings. I'm not entirely sure how to appropriately set up the context parameterization and how
+            to update the inference for a change in context... I'm also unsure how the context may confuse the above algs.
       
 '''
+
