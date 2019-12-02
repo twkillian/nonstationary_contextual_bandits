@@ -37,6 +37,29 @@ Notes:
             It's pretty clear that [1-3] are non-contextual settings. One potential contribution that I can make is in applying 
             these ideas to contextual settings. I'm not entirely sure how to appropriately set up the context parameterization and how
             to update the inference for a change in context... I'm also unsure how the context may confuse the above algs.
-      
+
+1 Dec 2019 -- Even further notes...
+            After chatting with Audrey Durand, it's unclear how to build a contextual environment that has the right interchange between
+            global decaying reward functions and user specific guidance in how to select arms. What we came together to figure out is to 
+            think of this as a full on resource allocation problem where there is a global allocation of items (low, medium and high value)
+            that gets integrated into the context of each user (some randomly generated latent variable vector) that belies some user preference
+            over those items. This way, the bandit selection algoritm needs to learn to associate user preferences with the resources available 
+            when choose which arm to pull.
+
+            In essence this will become a set of K bins with varying levels of fill and value. [xxxxx] [xx   ] [xxxx ]
+            Then each user will have a set of preferences over each item (eg. binomal probabilities that sum to 1): 
+                            User 1 (id: 245064): 0.25  0.45  0.30
+                            User 2 (id: 243345): 0.05  0.90  0.05
+                            User 3 (id: 323443): 0.125 0.225 0.65
+                            etc...
+            
+            What I need to do is figure out the right way to create the user context that belies similar preferences... Can use an equation of the
+            three preferences, or maybe even the preferences themselves at first...
+
+            The way that this will work is that User j is introduced along with their context including the resources available
+            --Using BLR or GPs / BayesOpt with Thompson Sampling... We determine which arm to "pull". 
+            --The user purchases the suggested item based on their personal preference for that item. 
+            --Update the priors and resources based on whether user chooses to purchase the suggested item or not.
+                                                                                                            
 '''
 
