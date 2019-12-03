@@ -15,12 +15,18 @@ The real challenge is determining how to best organize an algorithm to stay some
 approaches converge to a fixed/static policy after some time. There have been a couple of papers that have dealt with
 this. I'm needing to read them to get a better idea of what I need to do to differentiate my work from theirs as well 
 as build upon already "proven" methods.
-    [1] "Stochastic MAB Problem with Non-stationary Rewards": https://papers.nips.cc/paper/5378-stochastic-multi-armed-bandit-problem-with-non-stationary-rewards.pdf
-    [2] "Rotting Bandits": https://arxiv.org/pdf/1702.07274.pdf
-    [3] "Rotting bandits are no harder than stochastic ones": https://arxiv.org/pdf/1811.11043.pdf
-    [4] "Efficient Contextual Bandits in Non-Stationary Worlds": https://arxiv.org/pdf/1708.01799.pdf
-    [5] "Contextual GP Bandit Optimization": http://www.ong-home.my/papers/krause11cgp-ucb.pdf
-    [6] "A Contextual Bandit Alg for Ad Creative under Ad Fatigue": https://arxiv.org/pdf/1908.08936.pdf
+    [x1] "Stochastic MAB Problem with Non-stationary Rewards": https://papers.nips.cc/paper/5378-stochastic-multi-armed-bandit-problem-with-non-stationary-rewards.pdf
+    [x2] "Rotting Bandits": https://arxiv.org/pdf/1702.07274.pdf
+    [x3] "Rotting bandits are no harder than stochastic ones": https://arxiv.org/pdf/1811.11043.pdf
+    [x4] "Efficient Contextual Bandits in Non-Stationary Worlds": https://arxiv.org/pdf/1708.01799.pdf
+    [x5] "Contextual GP Bandit Optimization": http://www.ong-home.my/papers/krause11cgp-ucb.pdf
+    [x6] "A Contextual Bandit Alg for Ad Creative under Ad Fatigue": https://arxiv.org/pdf/1908.08936.pdf
+    [7] "Mortal Multi-Armed Bandits": http://papers.nips.cc/paper/3580-mortal-multi-armed-bandits.pdf
+    [x8] "Recovering Bandits": https://papers.nips.cc/paper/9561-recovering-bandits.pdf
+    [9] "Optimistic Planning for the Stochastic Knapsack Problem": http://proceedings.mlr.press/v54/pike-burke17a.html
+    [10] "Blocking Bandits": https://papers.nips.cc/paper/8725-blocking-bandits.pdf
+    [11] "Categorized Bandits": https://papers.nips.cc/paper/9586-categorized-bandits.pdf
+    [12] "Weighted Linear Bandits for Non-Stationary Environments": https://papers.nips.cc/paper/9372-weighted-linear-bandits-for-non-stationary-environments.pdf
 
  Nov. 2019 by Taylor Killian, University of Toronto
 ----------------------------------------------------------------------------------------
