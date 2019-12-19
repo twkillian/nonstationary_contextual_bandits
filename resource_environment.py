@@ -8,6 +8,7 @@ This file contains the classes and utilities defining the CB+Resource Management
 
 import numpy as np
 import numpy.random as npr
+import itertools
 
 
 # X Initialize the environment, take as input the number and values of choices
@@ -59,14 +60,14 @@ class Bandit_Resource_Environment:
         generate_user_preferences creates a NxK list of bernoulli probabilities for 
         how likely a user will purchase an item from each bin (each row sums to 1)
         '''
-
-        user_prefs = npr.random((self.num_users,self.num_bins))
-        # Randomly magnify certain rows and columns (This is used to make one of the items more desired by the randomly selected user)
-        rands = npr.choice(range(self.num_users),size=(round(self.num_users*.45),2))
-        rands[:,1] = rands[:,1]%self.num_bins # Isolate to only the relevant columns of the experiment.
-        user_prefs[rands[:,0],rands[:,1]] = 5*user_prefs[rands[:,0],rands[:,1]] # Increase the randomly chosen item preferences
+        # Create one column that is largely preferred and peter out over the rest of the bins.
+        user_prefs = npr.multivariate_normal( [0.8]+[0.2/(self.num_bins-1)]*(self.num_bins-1) , 0.005*np.eye(self.num_bins),size = self.num_users)
+        all_perm = np.array((list(itertools.permutations(list(range(self.num_bins)))))) # Note all possible permutations of the bins
+        temp = all_perm[np.random.randint(0,len(all_perm),size=self.num_users)] # Randomly select a permutation for each row of 'user_prefs'
+        # Randomly permute the columns of each row in 'user_prefs'
+        user_prefs = (user_prefs.flatten()[(temp+self.num_bins*np.arange(self.num_users)[...,np.newaxis]).flatten()]).reshape(user_prefs.shape) 
         # Normalize user preferences
-        user_prefs = user_prefs * (1/np.sum(user_prefs,axis=1))[:,np.newaxis]
+        user_prefs = abs(user_prefs) * (1/np.sum(abs(user_prefs),axis=1))[:,np.newaxis]
 
         self.user_prefs = user_prefs # Set class values
         self._generate_user_context() # Generate the various context variables that will be provided to the algorithm
@@ -74,8 +75,17 @@ class Bandit_Resource_Environment:
     def _generate_user_context(self):
         '''
         Create latent contextual identifier based on the underlying bernoulli probabilities for each user
+        Right now, based on the user's bin preference (the highest probability in each row) this will dictate which region of the number line the context will be uniformly sampled from.
+        The user contexts will then be stratified along the number line based on bin preference.
         '''
-        pass
+        user_cntxt = np.zeros(self.num_users) # Initialize Context array
+        strata_vals = np.append(np.linspace(0,1,self.num_bins,endpoint=False),1.0) # Create strata to sample contexts from based on user preferences
+        for ii in range(self.num_users):
+            user_pref_bin = np.argmax(self.user_prefs[ii]) # Get which bin user prefers
+            user_cntxt[ii] = npr.uniform(low=strata_vals[user_pref_bin],high=strata_vals[user_pref_bin+1]) # Sample context from stratum of number line corresponding to desired bin
+        
+        self.user_context = user_cntxt
+        
 
     def pull_arm(self,user_id,arm=0):
         '''
