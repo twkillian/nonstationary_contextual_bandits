@@ -10,7 +10,7 @@ import numpy as np
 import numpy.random as npr
 
 
-# Initialize the environment, take as input the number and values of choices
+# X Initialize the environment, take as input the number and values of choices
 
 # Provide methods to:
 # 
@@ -40,19 +40,19 @@ class Bandit_Resource_Environment:
         self.init_bins = np.round(tot_init_items*bin_allotments) # Place most items in first, low value bin and decrease from there.
         self.num_users = num_users
 
-        self.stock_resources() # Fill bins
+        self.restock() # Fill bins
         self._generate_user_preferences()
 
     
     
-    def stock_resources(self,fill_type='capacity'):
+    def restock(self,fill_type='capacity'):
         '''
         Fills the bins to capacity or some fraction of the space that remains.
         '''
         if fill_type == 'capacity':
-            self.resources_avail = self.init_bins
-        elif (type(fill_type) is int) and (fill_type < 1):
-            self.resources_avail = round(self.resources_avail + fill_type*(self.init_bins - self.resources_avail))
+            self.resources_avail = np.copy(self.init_bins)
+        elif (type(fill_type) is float) and (fill_type < 1):
+            self.resources_avail = np.round(self.resources_avail + fill_type*(self.init_bins - self.resources_avail))
     
     def _generate_user_preferences(self):
         ''' 
@@ -62,9 +62,9 @@ class Bandit_Resource_Environment:
 
         user_prefs = npr.random((self.num_users,self.num_bins))
         # Randomly magnify certain rows and columns (This is used to make one of the items more desired by the randomly selected user)
-        rands = npr.choice(range(self.num_users),size=(round(self.num_users*.25),2))
+        rands = npr.choice(range(self.num_users),size=(round(self.num_users*.45),2))
         rands[:,1] = rands[:,1]%self.num_bins # Isolate to only the relevant columns of the experiment.
-        user_prefs[rands[:,0],rands[:,1]] = 2.5*user_prefs[rands[:,0],rands[:,1]] # Increase the randomly chosen item preferences
+        user_prefs[rands[:,0],rands[:,1]] = 5*user_prefs[rands[:,0],rands[:,1]] # Increase the randomly chosen item preferences
         # Normalize user preferences
         user_prefs = user_prefs * (1/np.sum(user_prefs,axis=1))[:,np.newaxis]
 
@@ -75,10 +75,27 @@ class Bandit_Resource_Environment:
         '''
         Create latent contextual identifier based on the underlying bernoulli probabilities for each user
         '''
+        pass
 
     def pull_arm(self,user_id,arm=0):
         '''
         Pulls arm if bernoulli prob. (as keyed by user id) is satisfied, receives reward
         '''
-    
+
+        # Check to see if desired arm has any resources
+        if self.resources_avail[arm] <= 0:
+            return 0
+        
+        # Evaluate if pull is successful with user's specific bernoulli prob for the chosen item
+        # If successful reward = item's value, deduct item from bin
+        true_prob = self.user_prefs[user_id,arm]
+
+        if npr.random()<=true_prob: # "Sale" was successful
+            self.resources_avail[arm] -= 1
+            return self.bin_values[arm]
+        else: # "Sale" did not go through
+            return 0
+
+
+        
     
