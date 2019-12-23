@@ -45,7 +45,7 @@ import itertools
 
 class Bandit_Resource_Environment:
 
-    def __init__(self, random_state=0, num_bins=3, tot_init_items=1000, bin_values=[1,1,1], num_users=50):
+    def __init__(self, random_state=0, num_bins=3, tot_init_items=1000, bin_values=[1.0,1.0,1.0], num_users=50):
         self.num_bins = num_bins # The number of bins is roughly equivalent to the number of arms.
         self.bin_values = bin_values # The bin values correspond to the potential reward if the user is provided the item and they purchase it.
 
@@ -112,7 +112,7 @@ class Bandit_Resource_Environment:
         strata_vals = onp.append(np.linspace(0,1,self.num_bins,endpoint=False),1.0) # Create strata to sample contexts from based on user preferences
         for ii in range(self.num_users):
             user_pref_bin = onp.argmax(self.user_prefs[ii]) # Get which bin user prefers
-            user_cntxt[ii] = onp.random.uniform(strata_vals[user_pref_bin],strata_vals[user_pref_bin+1]) # Sample context from stratum of number line corresponding to desired bin
+            user_cntxt[ii] = onp.random.normal(0.5*(strata_vals[user_pref_bin]+strata_vals[user_pref_bin+1]),0.045) # Sample context from stratum of number line corresponding to desired bin
         
         self.user_context = user_cntxt
         
@@ -162,7 +162,7 @@ class Bandit_Resource_Environment:
             for __ in range(num_pulls_per_user):
 
                 # Note the resources available before each pull
-                resources_avail = onp.copy(self.resources_avail)
+                resources_avail = onp.copy(self.resources_avail) + 1e-6 * onp.random.random()
                 # Randomly sample an action/arm to pull
                 curr_action = onp.random.choice(range(self.num_bins))
                 # Pull arm
@@ -179,9 +179,11 @@ class Bandit_Resource_Environment:
         return np.tanh(x)
 
 
-    def _model(self, X, Y, D_H):
+    def _model(self, X, Y, D_H, train=True):
 
         D_X, D_Y = X.shape[1], self.num_bins
+        if train:
+            targets = Y[:,1]
 
         # Sample first layer (we put unit normal priors on all weights)
         w1 = numpyro.sample("w1", dist.Normal(np.zeros((D_X, D_H)), np.ones((D_X, D_H))))  # D_X D_H
@@ -195,25 +197,33 @@ class Bandit_Resource_Environment:
         w3 = numpyro.sample("w3", dist.Normal(np.zeros((D_H, D_Y)), np.ones((D_H, D_Y))))  # D_H D_Y
         z3 = np.matmul(z2, w3)  # N D_Y  <= output of the neural network
 
+        if train: # Isolate z3 to only the relevant predictions (which action was selected) from the neural network
+            filter_z3 = np.array(Y[:,0])
+            red_z3 = np.take(z3,filter_z3)
+
         # we put a prior on the observation noise
         prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
         sigma_obs = 1.0 / np.sqrt(prec_obs)
 
         # observe data
-        numpyro.sample("Y", dist.Normal(z3, sigma_obs), obs=Y)
+        if train:
+            numpyro.sample("Y", dist.Normal(red_z3, sigma_obs), obs=1.0*targets)
+        else:
+            numpyro.sample("Y_pred", dist.Normal(z3, sigma_obs), obs=Y)
     
     
-    def _run_inference(self, X, Y, D_H):
+    def _run_inference(self, X, Y, D_H,initial_run=True):
         
         if self.bnn_num_chains > 1:
             self.rng_key = random.split(self.rng_key,self.bnn_num_chains)
         start = time.time()
-        kernel = NUTS(self._model)
-        mcmc = MCMC(kernel, self.bnn_warm_up, self.bnn_num_samples, num_chains = self.bnn_num_chains)
-        mcmc.run(self.rng_key, X, Y, D_H)
+        if initial_run:
+            self.kernel = NUTS(self._model)
+            self.mcmc = MCMC(self.kernel, self.bnn_warm_up, self.bnn_num_samples, num_chains = self.bnn_num_chains)
+        self.mcmc.run(self.rng_key, X, Y, D_H)
         print('\nMCMC elapsed time:', time.time() - start)
         
-        return mcmc.get_samples()
+        return self.mcmc.get_samples()
 
 
     
@@ -225,20 +235,18 @@ class Bandit_Resource_Environment:
 
         model = handlers.substitute( handlers.seed(self._model,rng_key), samples )
         # Note: Y will be sampled in the model because we pass Y=None here
-        model_trace = handlers.trace(model).get_trace(X=X, Y=None, D_H=self.bnn_dh)
+        model_trace = handlers.trace(model).get_trace(X=X, Y=None, D_H=self.bnn_dh,train=False)
         
-        return model_trace['Y']['value']
+        return model_trace['Y_pred']['value']
     
     
-    def fit_bnn_predictor(self):
+    def fit_bnn_predictor(self,initial_run=True):
         N, D_X, D_H = len(self.batch), self.bnn_dx, self.bnn_dh
         
         # Extract training data
         X = self.batch[:,1:5]
-        Y = onp.zeros((len(self.batch),self.num_bins))
-        for ii in range(len(self.batch)):
-            Y[ii,int(self.batch[ii,5])] = self.batch[ii,6]
+        Y = self.batch[:,5:7].astype(int)
         
-        samples = self._run_inference(X, Y, D_H)
+        samples = self._run_inference(X, Y, D_H,initial_run)
 
         self.bnn_samples = samples
