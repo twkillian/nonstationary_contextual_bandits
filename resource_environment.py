@@ -65,7 +65,7 @@ class Bandit_Resource_Environment:
         self.bnn_dh = 5 # Size of hidden layer
         self.bnn_dy = num_bins # Size of output dimensions
         self.bnn_warm_up = 1000 # Number of warmup runs for MCMC
-        self.bnn_num_samples = 2000 # Number of BNN Samples
+        self.bnn_num_samples = 5000 # Number of BNN Samples
         self.bnn_num_chains = 1 # Number of MCMC chains
         self.bnn_device = 'cpu'
 
@@ -240,12 +240,13 @@ class Bandit_Resource_Environment:
         return model_trace['Y_pred']['value']
     
     
-    def fit_bnn_predictor(self,initial_run=True):
+    def fit_bnn_predictor(self,X=None,Y=None,initial_run=True):
         N, D_X, D_H = len(self.batch), self.bnn_dx, self.bnn_dh
         
         # Extract training data
-        X = self.batch[:,1:5]
-        Y = self.batch[:,5:7].astype(int)
+        if initial_run:
+            X = self.batch[:,1:5]
+            Y = self.batch[:,5:7].astype(int)
         
         samples = self._run_inference(X, Y, D_H,initial_run)
 
