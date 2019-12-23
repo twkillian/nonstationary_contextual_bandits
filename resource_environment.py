@@ -90,7 +90,7 @@ class Bandit_Resource_Environment:
         how likely a user will purchase an item from each bin (each row sums to 1)
         '''
         # Create one column that is largely preferred and peter out over the rest of the bins.
-        user_prefs = random.multivariate_normal(self.rng_key,np.array([0.7]+[0.3/(self.num_bins-1)]*(self.num_bins-1)) , 0.005*np.eye(self.num_bins), shape=(self.num_users,))
+        user_prefs = random.multivariate_normal(self.rng_key,np.array([0.85]+[0.15/(self.num_bins-1)]*(self.num_bins-1)) , 0.005*np.eye(self.num_bins), shape=(self.num_users,))
         all_perm = onp.array((list(itertools.permutations(list(range(self.num_bins)))))) # Note all possible permutations of the bins
         temp = all_perm[random.randint(self.rng_key,(self.num_users,),0,len(all_perm))] # Randomly select a permutation for each row of 'user_prefs'
         # Randomly permute the columns of each row in 'user_prefs'
