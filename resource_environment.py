@@ -189,13 +189,13 @@ class Bandit_Resource_Environment:
         w1 = numpyro.sample("w1", dist.Normal(np.zeros((D_X, D_H)), np.ones((D_X, D_H))))  # D_X D_H
         z1 = self._nonlin(np.matmul(X, w1))   # N D_H  <= first layer of activations
 
-        # sample second layer
-        w2 = numpyro.sample("w2", dist.Normal(np.zeros((D_H, D_H)), np.ones((D_H, D_H))))  # D_H D_H
-        z2 = self._nonlin(np.matmul(z1, w2))  # N D_H  <= second layer of activations
+        # # sample second layer
+        # w2 = numpyro.sample("w2", dist.Normal(np.zeros((D_H, D_H)), np.ones((D_H, D_H))))  # D_H D_H
+        # z2 = self._nonlin(np.matmul(z1, w2))  # N D_H  <= second layer of activations
 
         # sample final layer of weights and neural network output
         w3 = numpyro.sample("w3", dist.Normal(np.zeros((D_H, D_Y)), np.ones((D_H, D_Y))))  # D_H D_Y
-        z3 = np.matmul(z2, w3)  # N D_Y  <= output of the neural network
+        z3 = np.matmul(z1, w3)  # N D_Y  <= output of the neural network
 
         # if train: # Isolate z3 to only the relevant predictions (which action was selected) from the neural network
         #     filter_z3 = np.array(Y[:,0])
