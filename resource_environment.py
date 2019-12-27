@@ -49,10 +49,7 @@ class Bandit_Resource_Environment:
         self.num_bins = num_bins # The number of bins is roughly equivalent to the number of arms.
         self.bin_values = bin_values # The bin values correspond to the potential reward if the user is provided the item and they purchase it.
 
-        rng_key, rng_key_predict = random.split(random.PRNGKey(random_state))
-
-        self.rng_key = rng_key
-        self.rng_key_predict = rng_key_predict
+        self.rng_key = random.PRNGKey(random_state)
 
         # Create initial allotments of bins where the lowest value items will be plentiful while the high value items may be scarce
         bin_allotments = sorted(random.randint(self.rng_key,(self.num_bins,),25,75))[::-1]
@@ -64,8 +61,8 @@ class Bandit_Resource_Environment:
         self.bnn_dx = 4 # Input dimensions
         self.bnn_dh = 5 # Size of hidden layer
         self.bnn_dy = num_bins # Size of output dimensions
-        self.bnn_warm_up = 250 # Number of warmup runs for MCMC
-        self.bnn_num_samples = 2000 # Number of BNN Samples
+        self.bnn_warm_up = 500 # Number of warmup runs for MCMC
+        self.bnn_num_samples = 2500 # Number of BNN Samples
         self.bnn_num_chains = 1 # Number of MCMC chains
         self.bnn_device = 'cpu'
 
@@ -162,7 +159,7 @@ class Bandit_Resource_Environment:
             for __ in range(num_pulls_per_user):
 
                 # Note the resources available before each pull
-                resources_avail = onp.copy(self.resources_avail) + 1e-6 * onp.random.random()
+                resources_avail = onp.copy(self.resources_avail) + 1e-7 * onp.random.random()
                 # Randomly sample an action/arm to pull
                 curr_action = onp.random.choice(range(self.num_bins))
                 # Pull arm
@@ -170,7 +167,11 @@ class Bandit_Resource_Environment:
                 # Append data to batch.
                 batch.append(onp.array([user_idx,user_cntxt,*resources_avail,curr_action,curr_reward]))
 
-        self.batch = onp.vstack(batch)
+                resources_avail[curr_action] = 1e-7*onp.random.random()
+                batch.append(onp.array([user_idx,user_cntxt,*resources_avail,curr_action,0.]))
+
+        self.batch = batch
+        # self.batch = onp.vstack(batch)
         return batch
 
 
@@ -202,7 +203,7 @@ class Bandit_Resource_Environment:
         #     red_z3 = np.take(z3,filter_z3)
 
         # we put a prior on the observation noise
-        prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
+        prec_obs = numpyro.sample("prec_obs", dist.Gamma(10.0, 1.0))
         sigma_obs = 1.0 / np.sqrt(prec_obs)
 
         # # observe data
@@ -212,52 +213,63 @@ class Bandit_Resource_Environment:
         numpyro.sample("Y", dist.Normal(z3, sigma_obs), obs=Y)
     
     
-    def _run_inference(self, X, Y, D_H,initial_run=True):
+    def _run_inference(self, rng_key, X, Y, D_H):
         
         if self.bnn_num_chains > 1:
             self.rng_key = random.split(self.rng_key,self.bnn_num_chains)
         start = time.time()
-        # if initial_run:
-        kernel = NUTS(self._model)
+        kernel = NUTS(self._model,max_tree_depth=5)
         mcmc = MCMC(kernel, self.bnn_warm_up, self.bnn_num_samples, num_chains = self.bnn_num_chains)
-        mcmc.run(self.rng_key, X, Y, D_H)
+        mcmc.run(rng_key, X, Y, D_H)
         print('\nMCMC elapsed time:', time.time() - start)
         
         return mcmc.get_samples()
 
 
     
-    def bnn_predict(self, rng_key, samples, X):
+    def _bnn_predict(self, rng_key, samples, X):
         '''
         This module takes the samples of a "trained" BNN and produces predictions
         based on the X values passed in
         '''
         
-        value_predictions = []
+        model = handlers.substitute( handlers.seed(self._model,rng_key), samples ) # Pass post. sampled parameters to model
+        # Gather a trace over possible Y values given the model parameters and input value X
+        model_trace = handlers.trace(model).get_trace(X=X, Y=None, D_H=self.bnn_dh,train=False) # Note: Y will be sampled in the model because we pass Y=None here
         
-        for ii in range(self.num_bins):
-            model = handlers.substitute( handlers.seed(self._model,rng_key), samples[ii] )
-            # Note: Y will be sampled in the model because we pass Y=None here
-            model_trace = handlers.trace(model).get_trace(X=X, Y=None, D_H=self.bnn_dh,train=False)
-            value_predictions.append(model_trace['Y']['value'])
-        
-        return value_predictions
+        return model_trace['Y']['value']
     
     
-    def fit_bnn_predictor(self,X=None,Y=None,initial_run=True):
+    def fit_bnn_predictor(self, rng_key):
         N, D_X, D_H = len(self.batch), self.bnn_dx, self.bnn_dh
         
         # Extract training data
-        # if initial_run:
+        batch = onp.vstack(self.batch)
         X, y = [],[]
         for ii in range(self.num_bins):
-            X.append(self.batch[self.batch[:,5]==ii,1:5])
-            y.append(self.batch[self.batch[:,5]==ii,-1])
+            X.append(batch[batch[:,5]==ii,1:5])
+            y.append(batch[batch[:,5]==ii,-1])
 
         post_samples = []
         for ii in range(self.num_bins):
-            post_samples.append(self._run_inference(X[ii],y[ii],D_H))
+            post_samples.append(self._run_inference(rng_key, X[ii],y[ii],D_H))
         
         # samples = self._run_inference(X, Y, D_H,initial_run)
 
         self.bnn_samples = post_samples
+
+
+    def predict_values(self, predict_rng_key, X):
+
+        value_predictions = []
+
+        for ii in range(self.num_bins):
+
+            vmap_args = (self.bnn_samples[ii], random.split(predict_rng_key, self.bnn_num_samples*self.bnn_num_chains))
+            prediction = vmap(lambda samples, rng_key: self._bnn_predict(rng_key,samples,X))(*vmap_args)
+            # Take mean of prediction samples to provide prediction for this model
+            pred = np.mean(prediction,axis=0)
+            # Append predction to output list
+            value_predictions.append(pred)
+        
+        return value_predictions
