@@ -64,8 +64,8 @@ class Bandit_Resource_Environment:
         self.bnn_dx = 4 # Input dimensions
         self.bnn_dh = 5 # Size of hidden layer
         self.bnn_dy = num_bins # Size of output dimensions
-        self.bnn_warm_up = 1000 # Number of warmup runs for MCMC
-        self.bnn_num_samples = 5000 # Number of BNN Samples
+        self.bnn_warm_up = 250 # Number of warmup runs for MCMC
+        self.bnn_num_samples = 2000 # Number of BNN Samples
         self.bnn_num_chains = 1 # Number of MCMC chains
         self.bnn_device = 'cpu'
 
@@ -181,9 +181,9 @@ class Bandit_Resource_Environment:
 
     def _model(self, X, Y, D_H, train=True):
 
-        D_X, D_Y = X.shape[1], self.num_bins
-        if train:
-            targets = Y[:,1]
+        D_X, D_Y = X.shape[1], 1#self.num_bins
+        # if train:
+        #     targets = Y[:,1]
 
         # Sample first layer (we put unit normal priors on all weights)
         w1 = numpyro.sample("w1", dist.Normal(np.zeros((D_X, D_H)), np.ones((D_X, D_H))))  # D_X D_H
@@ -197,19 +197,19 @@ class Bandit_Resource_Environment:
         w3 = numpyro.sample("w3", dist.Normal(np.zeros((D_H, D_Y)), np.ones((D_H, D_Y))))  # D_H D_Y
         z3 = np.matmul(z2, w3)  # N D_Y  <= output of the neural network
 
-        if train: # Isolate z3 to only the relevant predictions (which action was selected) from the neural network
-            filter_z3 = np.array(Y[:,0])
-            red_z3 = np.take(z3,filter_z3)
+        # if train: # Isolate z3 to only the relevant predictions (which action was selected) from the neural network
+        #     filter_z3 = np.array(Y[:,0])
+        #     red_z3 = np.take(z3,filter_z3)
 
         # we put a prior on the observation noise
         prec_obs = numpyro.sample("prec_obs", dist.Gamma(3.0, 1.0))
         sigma_obs = 1.0 / np.sqrt(prec_obs)
 
-        # observe data
-        if train:
-            numpyro.sample("Y", dist.Normal(red_z3, sigma_obs), obs=1.0*targets)
-        else:
-            numpyro.sample("Y_pred", dist.Normal(z3, sigma_obs), obs=Y)
+        # # observe data
+        # if train:
+        #     numpyro.sample("Y", dist.Normal(red_z3, sigma_obs), obs=1.0*targets)
+        # else:
+        numpyro.sample("Y", dist.Normal(z3, sigma_obs), obs=Y)
     
     
     def _run_inference(self, X, Y, D_H,initial_run=True):
@@ -217,13 +217,13 @@ class Bandit_Resource_Environment:
         if self.bnn_num_chains > 1:
             self.rng_key = random.split(self.rng_key,self.bnn_num_chains)
         start = time.time()
-        if initial_run:
-            self.kernel = NUTS(self._model)
-            self.mcmc = MCMC(self.kernel, self.bnn_warm_up, self.bnn_num_samples, num_chains = self.bnn_num_chains)
-        self.mcmc.run(self.rng_key, X, Y, D_H)
+        # if initial_run:
+        kernel = NUTS(self._model)
+        mcmc = MCMC(kernel, self.bnn_warm_up, self.bnn_num_samples, num_chains = self.bnn_num_chains)
+        mcmc.run(self.rng_key, X, Y, D_H)
         print('\nMCMC elapsed time:', time.time() - start)
         
-        return self.mcmc.get_samples()
+        return mcmc.get_samples()
 
 
     
@@ -232,22 +232,32 @@ class Bandit_Resource_Environment:
         This module takes the samples of a "trained" BNN and produces predictions
         based on the X values passed in
         '''
-
-        model = handlers.substitute( handlers.seed(self._model,rng_key), samples )
-        # Note: Y will be sampled in the model because we pass Y=None here
-        model_trace = handlers.trace(model).get_trace(X=X, Y=None, D_H=self.bnn_dh,train=False)
         
-        return model_trace['Y_pred']['value']
+        value_predictions = []
+        
+        for ii in range(self.num_bins):
+            model = handlers.substitute( handlers.seed(self._model,rng_key), samples[ii] )
+            # Note: Y will be sampled in the model because we pass Y=None here
+            model_trace = handlers.trace(model).get_trace(X=X, Y=None, D_H=self.bnn_dh,train=False)
+            value_predictions.append(model_trace['Y']['value'])
+        
+        return value_predictions
     
     
     def fit_bnn_predictor(self,X=None,Y=None,initial_run=True):
         N, D_X, D_H = len(self.batch), self.bnn_dx, self.bnn_dh
         
         # Extract training data
-        if initial_run:
-            X = self.batch[:,1:5]
-            Y = self.batch[:,5:7].astype(int)
-        
-        samples = self._run_inference(X, Y, D_H,initial_run)
+        # if initial_run:
+        X, y = [],[]
+        for ii in range(self.num_bins):
+            X.append(self.batch[self.batch[:,5]==ii,1:5])
+            y.append(self.batch[self.batch[:,5]==ii,-1])
 
-        self.bnn_samples = samples
+        post_samples = []
+        for ii in range(self.num_bins):
+            post_samples.append(self._run_inference(X[ii],y[ii],D_H))
+        
+        # samples = self._run_inference(X, Y, D_H,initial_run)
+
+        self.bnn_samples = post_samples
