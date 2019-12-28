@@ -58,9 +58,9 @@ class Bandit_Resource_Environment:
         self.num_users = num_users
 
         # Set initialization for BNN parameters
-        self.bnn_dx = 4 # Input dimensions
+        self.bnn_dx = num_bins+1 # Input dimensions
         self.bnn_dh = 5 # Size of hidden layer
-        self.bnn_dy = num_bins # Size of output dimensions
+        self.bnn_dy = 1 # Size of output dimensions
         self.bnn_warm_up = 500 # Number of warmup runs for MCMC
         self.bnn_num_samples = 2500 # Number of BNN Samples
         self.bnn_num_chains = 1 # Number of MCMC chains
@@ -126,7 +126,7 @@ class Bandit_Resource_Environment:
         return curr_user, curr_context
 
     
-    def pull_arm(self,user_id,arm=0):
+    def pull_arm(self,user_id,execute=True,arm=0):
         '''
         Pulls arm if bernoulli prob. (as keyed by user id) is satisfied, receives reward
         '''
@@ -140,7 +140,8 @@ class Bandit_Resource_Environment:
         true_prob = self.user_prefs[user_id,arm]
 
         if onp.random.random()<=true_prob: # "Sale" was successful
-            self.resources_avail[arm] = self.resources_avail[arm]-1
+            if execute:
+                self.resources_avail[arm] = self.resources_avail[arm]-1
             return self.bin_values[arm]
         else: # "Sale" did not go through
             return 0
@@ -247,8 +248,8 @@ class Bandit_Resource_Environment:
         batch = onp.vstack(self.batch)
         X, y = [],[]
         for ii in range(self.num_bins):
-            X.append(batch[batch[:,5]==ii,1:5])
-            y.append(batch[batch[:,5]==ii,-1])
+            X.append(batch[batch[:,-2]==ii,1:(2+self.num_bins)])
+            y.append(batch[batch[:,-2]==ii,-1])
 
         post_samples = []
         for ii in range(self.num_bins):
@@ -273,3 +274,25 @@ class Bandit_Resource_Environment:
             value_predictions.append(pred)
         
         return value_predictions
+
+    def randomized_agent(self, predict_rng_key, X):
+        '''
+        Agent that just returns a random action, regardless of context X
+        '''
+        return onp.random.choice(range(self.num_bins))
+
+    def ts_bnn_agent(self, predict_rng_key, X):
+        '''
+        Agent that utilizes BNN prediction of expected rewards to choose from a la Thompson Sampling
+        '''
+        # Predict expected values of reward (per bin) via BNN
+        value_preds = self.predict_values(predict_rng_key, X)
+        # Return action that has the highest expected return
+        return np.argmax(value_preds)
+
+    def oracle(self, user_index, x_test):
+        '''
+        Oracle that returns the provided user's most preferred arm, 
+        conditioned on currently available resources
+        '''
+        return np.argmax(self.user_prefs[user_index]*(self.resources_avail>0).astype(int))
