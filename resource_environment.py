@@ -160,7 +160,7 @@ class Bandit_Resource_Environment:
             for __ in range(num_pulls_per_user):
 
                 # Note the resources available before each pull
-                resources_avail = onp.copy(self.resources_avail) + 1e-7 * onp.random.random()
+                resources_avail = onp.copy(self.resources_avail) + 1e-4 * onp.random.random()
                 # Randomly sample an action/arm to pull
                 curr_action = onp.random.choice(range(self.num_bins))
                 # Pull arm
@@ -168,7 +168,7 @@ class Bandit_Resource_Environment:
                 # Append data to batch.
                 batch.append(onp.array([user_idx,user_cntxt,*resources_avail,curr_action,curr_reward]))
 
-                resources_avail[curr_action] = 1e-7*onp.random.random()
+                resources_avail[curr_action] = 1e-4 * onp.random.random()
                 batch.append(onp.array([user_idx,user_cntxt,*resources_avail,curr_action,0.]))
 
         self.batch = batch

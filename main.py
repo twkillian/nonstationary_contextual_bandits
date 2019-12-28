@@ -92,9 +92,9 @@ def main(env,agent,agent_type,oracle,num_iters,rstk_per,rstk_fq,bnn_fq,rng_keys,
         # Sample new context
         usr_idx, usr_cntxt = env.sample_new_user()
         # Get current resources avail
-        resources_avail = onp.copy(env.resources_avail)
+        resources_avail = onp.copy(env.resources_avail) + 1e-4 * onp.random.random()
         # Create new query point
-        x_test = np.insert(resources_avail,0,usr_cntxt)[np.newaxis,:]
+        x_test = onp.insert(resources_avail,0,usr_cntxt)[np.newaxis,:]
 
         # Get action from agent
         action = agent(prng_keys[itr],x_test)
@@ -104,13 +104,13 @@ def main(env,agent,agent_type,oracle,num_iters,rstk_per,rstk_fq,bnn_fq,rng_keys,
         # Take step in env and get reward
         a_rew = env.pull_arm(usr_idx,execute=True,arm=action)
         # Get oracle reward
-        o_rew = env.pull_arm(usr_idx,exectute=False,arm=o_act)
+        o_rew = env.pull_arm(usr_idx,execute=False,arm=o_act)
 
         # Record the regret
         regret[itr] = regret[itr-1] + (o_rew-a_rew)
 
         # Add experience to the batch
-        env.batch = env.batch.append(onp.array([usr_idx,usr_cntxt,*resources_avail,action,a_rew]))
+        env.batch.append(onp.array([usr_idx,usr_cntxt,*resources_avail,action,a_rew]))
 
         if itr % rstk_fq == 0:
             env.restock(fill_type=rstk_per)
@@ -144,18 +144,27 @@ if __name__ == '__main__':
 
     bnn_refit_freq = 50
 
-    agent_type = 'random'
+    agent_type = 'ts_bnn'
 
     # == Create RNG Keys == 
     rng_trainers = random.split(random.PRNGKey(1234),50)
     rng_testers = random.split(random.PRNGKey(2334),5000)
 
     # === Initialize the environment ===
-    env = Bandit_Resource_Environment(random_state=1234,num_users=1000,num_bins=n_bins,bin_values=[1.0]*n_bins,tot_init_items=tot_items)
+    env = Bandit_Resource_Environment(
+                                        random_state=1234,
+                                        num_users=1000,
+                                        num_bins=n_bins,
+                                        bin_values=[1.0]*n_bins,
+                                        tot_init_items=tot_items)
     # Initialize a batch of data from the environment to train BNNs with
     train_batch = env.initialize_batch_of_data(num_iters=n_train_iters, num_pulls_per_user=n_train_pulls)
-    # Train a BNN for each action
-    env.fit_bnn_predictor(rng_trainers[0])
+    # Train a BNN for each action if needed
+    if agent_type != 'random':
+        env.fit_bnn_predictor(rng_trainers[0])
+    # Restock env to get started
+    env.restock()
+
 
     # ==== Initialize Agents + Oracle ====
     if agent_type == 'random':
@@ -168,8 +177,16 @@ if __name__ == '__main__':
     oracle = env.oracle
     
     # ===== Run Bandit Algs, compare with oracle =====
-    regret = main(env,agent,agent_type,oracle,num_iterations,restock_percent,restock_freq,bnn_refit_freq,rng_trainers,rng_testers)
+    regret = main(
+                    env,
+                    agent,
+                    agent_type,
+                    oracle,
+                    num_iterations,
+                    restock_percent,restock_freq,
+                    bnn_refit_freq,
+                    rng_trainers,rng_testers)
     # Save regret
-    onp.save(f'{agent_type}_regret.npy', np.array(regret))
+    onp.save(f'{agent_type}_regret.npy', onp.array(regret))
 
 
