@@ -288,11 +288,11 @@ class Bandit_Resource_Environment:
         # Predict expected values of reward (per bin) via BNN
         value_preds = self.predict_values(predict_rng_key, X)
         # Return action that has the highest expected return
-        return np.argmax(value_preds)
+        return onp.argmax(value_preds)
 
     def oracle(self, user_index, x_test):
         '''
         Oracle that returns the provided user's most preferred arm, 
         conditioned on currently available resources
         '''
-        return np.argmax(self.user_prefs[user_index]*(self.resources_avail>0).astype(int))
+        return onp.argmax(self.user_prefs[user_index]*(self.resources_avail>0).astype(int))

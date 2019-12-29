@@ -140,9 +140,9 @@ if __name__ == '__main__':
     num_iterations = 5000
 
     restock_percent = 0.5
-    restock_freq = 100
+    restock_freq = 300
 
-    bnn_refit_freq = 50
+    bnn_refit_freq = 100
 
     agent_type = 'ts_bnn'
 
