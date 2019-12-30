@@ -83,7 +83,7 @@ class OnlineLogisticRegression:
     def fit(self, X, y):
                 
         # step 1, find w
-        self.w = minimize(self.loss, self.w, args=(X, y), jac=self.grad, method="L-BFGS-B", options={'maxiter': 20, 'disp':True}).x
+        self.w = minimize(self.loss, self.w, args=(X, y), jac=self.grad, method="L-BFGS-B", options={'maxiter': 50, 'disp':True}).x
         self.m = self.w
         
         # step 2, update q
@@ -120,14 +120,15 @@ class DandR_Environment:
     class description incoming
     '''
 
-    def __init__(self, random_state=0, num_arms=3, init_values=[1.0,1.0,1.0], decay_rate=0.05, recovery_rate=0.05):
+    def __init__(self, random_state=0, num_arms=3, init_values=[1.0,1.0,1.0], decay_rate=0.05, recovery_rate=0.05, experiment_iters=5000, agg_window=50):
         self.num_arms = num_arms 
+        self.exp_iters = experiment_iters
         self.init_probs = init_values
         self.arm_probs = init_values # The initial arm probabilities
         self.context = np.zeros(num_arms)
 
         # Set initialization for BNN parameters
-        self.blr_dx = num_arms+1 # Input dimensions
+        self.blr_dx = 2*num_arms+1 # Input dimensions
         self.blr_alpha = 0.9
         self.blr_lambda = 0.01 
         self.num_samples = 1000 # Number of BLR Samples
@@ -136,6 +137,9 @@ class DandR_Environment:
         self.recovery_rate = 1+recovery_rate
 
         self.batch = []
+        self.history = np.zeros((self.exp_iters,self.num_arms))
+        self.round = 0
+        self.agg_window = 50
 
         self._reset()
         self._initialize_batch_of_data()
@@ -146,6 +150,10 @@ class DandR_Environment:
         ''' Update the internal context of the bandit (set arm played to zero, increment all other arms) '''
         self.context[arm] = 0
         self.context[np.arange(self.num_arms) != arm] += 1
+
+        self.history[self.round,arm] = 1
+        self.round += 1
+        
 
     def _update_arm_probs(self,arm=0):
         ''' Update the arm probabilities according to whether they were pulled or not '''
@@ -159,6 +167,8 @@ class DandR_Environment:
         ''' Reset the arms reward probabilities and the internal context'''
         self.arm_probs = np.copy(self.init_probs)
         self.context = np.zeros(self.num_arms)
+        self.history = np.zeros((self.exp_iters,self.num_arms))
+        self.round = 0
     
     def _initialize_batch_of_data(self,num_iters=1000):
         '''
@@ -175,6 +185,10 @@ class DandR_Environment:
             __ = self.pull_arm(arm=curr_action)
 
     
+    def _agg_history(self):
+        ''' Aggregating history over self.agg_window to provide a bit more context into the arms '''
+        return np.sum(self.history[max(self.round-self.agg_window,0):self.round,:],axis=0)
+    
     def pull_arm(self,arm=0):
         ''' Method for pulling, returning reward and updating arms + context '''
         # Evaluate if pull is successful with user's specific bernoulli prob for the chosen item
@@ -186,9 +200,12 @@ class DandR_Environment:
         else: # Pull was unsuccessful
             reward = 0
 
+        # Aggregate history
+        hist_context = self._agg_history()
+
         # Record round
         curr_context = np.copy(self.context)
-        self.batch.append([*curr_context,arm,reward])
+        self.batch.append([*curr_context,*hist_context,arm,reward])
         
         # Update all arm contexts and probabilities
         self._update_context(arm)
@@ -207,7 +224,7 @@ class DandR_Environment:
             for ii in range(self.num_arms):
                 self.model.append(OnlineLogisticRegression(self.blr_lambda, self.blr_alpha, self.blr_dx))
 
-                X.append( np.hstack([np.ones((len(self.batch),1)),batch[batch[:,-2]==ii,:self.num_arms]]) )
+                X.append( np.hstack([ np.ones( (sum(batch[:,-2]==ii),1) ) , batch[batch[:,-2]==ii,:self.blr_dx-1] ]) )
                 y.append(batch[batch[:,-2]==ii,-1])
 
         else:
@@ -216,7 +233,7 @@ class DandR_Environment:
                 batch = np.vstack(self.batch)
                 X, y = [], []
                 for ii in range(self.num_arms):
-                    X.append( np.hstack([np.ones((len(self.batch),1)),batch[batch[:,-2]==ii,:self.num_arms]]) )
+                    X.append( np.hstack([ np.ones( (sum(batch[:,-2]==ii),1) ), batch[batch[:,-2]==ii,:self.blr_dx-1] ]) )
                     y.append(batch[batch[:,-2]==ii,-1])
 
         # Fit the separate Bayesian Linear Models for each arm
@@ -229,10 +246,17 @@ class DandR_Environment:
         probs = []
         X_test = np.insert(X_test,0,1)[np.newaxis,:]
         for ii in range(self.num_arms):
-            probs.append(self.model[ii].predict_proba(X_test, mode=mode))
+            temp = self.model[ii].predict_proba(X_test, mode=mode)
+            probs.append(temp[0,1])
 
-        return probs
+        return probs / np.sum(probs)
 
+    def random_agent(self,X_test):
+        '''
+        Agent that returns a random selection among the arms
+        '''
+        return npr.choice(np.arange(self.num_arms))
+    
     def ts_blr_agent(self,X_test):
         '''
         Agent that utilizes BLR prediction of expected rewards to choose from a la Thompson Sampling

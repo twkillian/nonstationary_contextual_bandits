@@ -275,7 +275,7 @@ class Bandit_Resource_Environment:
         
         return value_predictions
 
-    def randomized_agent(self, predict_rng_key, X):
+    def random_agent(self, predict_rng_key, X):
         '''
         Agent that just returns a random action, regardless of context X
         '''
