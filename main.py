@@ -95,6 +95,7 @@ def main(env,agent,agent_type,oracle,num_iters,refit_fq,rng_trainers,rng_testers
         env.fit_predictor(rng_trainers[0])
 
     regret = onp.zeros(num_iters)
+    rewards = onp.zeros((num_iters,2))
     for itr in onp.arange(num_iters):
         # Sample new context
         # usr_idx, usr_cntxt = env.sample_new_user()
@@ -117,7 +118,7 @@ def main(env,agent,agent_type,oracle,num_iters,refit_fq,rng_trainers,rng_testers
         # Get oracle reward
         # o_rew = env.pull_arm(usr_idx, execute=False, arm=o_act)
         o_rew = env.pull_arm(execute=False, arm=o_act)
-        print(f"{agent_type} Action: {action}, Oracle Action: {o_act}, {agent_type} Reward: {a_rew}, Oracle Reward: {o_rew}, Regret: {o_rew-a_rew}")
+        # print(f"{agent_type} Action: {action}, Oracle Action: {o_act}, {agent_type} Reward: {a_rew}, Oracle Reward: {o_rew}, Regret: {o_rew-a_rew}")
 
         # Record the regret
         regret[itr] = regret[itr-1] + (o_rew-a_rew)
@@ -129,11 +130,12 @@ def main(env,agent,agent_type,oracle,num_iters,refit_fq,rng_trainers,rng_testers
         #     env.restock(fill_type=rstk_per)
 
         if (agent_type == 'ts_bayes') and ((itr+1) % refit_fq == 0):
+            print(f"========Fitting BLR after iteration {itr+1}========")
             env.fit_predictor(rng_trainers[0])
             times_fit += 1
 
 
-    return regret
+    return regret, rewards
 
 
 
@@ -164,12 +166,12 @@ if __name__ == '__main__':
     num_iterations = 2500
     agg_window = 50
 
-    refit_freq = 50
+    refit_freq = 100
 
     env_type = 'decay'
 
     dandr_rates = {'slow':0.05,'moderate':0.10,'fast':0.25}
-    decay_type = 'fast'
+    decay_type = 'slow'
     recovery_type = 'fast'
 
     reward_center = 0.65
@@ -180,8 +182,8 @@ if __name__ == '__main__':
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     
 
-    # agent_type = 'ts_bayes'
-    agent_type = 'random'
+    agent_type = 'ts_bayes'
+    # agent_type = 'random'
 
     # == Create RNG Keys == 
     rng_trainers = random.split(random.PRNGKey(1234),50)
@@ -217,7 +219,7 @@ if __name__ == '__main__':
     oracle = env.oracle
     
     # ===== Run Bandit Algs, compare with oracle =====
-    regret = main(
+    regret, rewards = main(
                     env,
                     agent,
                     agent_type,
@@ -228,5 +230,6 @@ if __name__ == '__main__':
                     rng_testers)
     # Save regret
     onp.save(f'regrets/regret_{env_type}_{agent_type}_{n_arms}arms_{num_iterations}iters_{refit_freq}fitfreq_{decay_type}decay_{recovery_type}recovery_{timestamp}.npy', onp.array(regret))
+    onp.save(f'regrets/reward_{env_type}_{agent_type}_{n_arms}arms_{num_iterations}iters_{refit_freq}fitfreq_{decay_type}decay_{recovery_type}recovery_{timestamp}.npy', onp.array(rewards))
 
 

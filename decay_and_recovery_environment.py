@@ -35,24 +35,6 @@ import numpy.random as npr
 
 import itertools
 
-# Initialize the environment, take as input the number and values of choices
-
-# Provide methods to:
-# 
-#    - Select arms based on context (user preferences and number of items remaining) + Thompson Sampling
-#        - It seems that it might be best to use a BNN for the reward prediction since we can comfortably adjust
-#          for context as well as the various actions. If I use a GP, it might get a little unwieldly since we'll 
-#          need to train a GPLVM for each action and might need significant numbers of users to get the regressions to work
-#        - We can't use BLR since the expected reward should vanish if an item is 'gone' and such an item is chosen. This
-#          is inherently a non-linear relationship in the context.
-#        - The true reward will be something of the form:
-#                  r = \sum_j (val_j*Pr(usrpref_j))*I(amtRemaining_j>0)
-#           where Pr(usrpref_j) is a bernoulli random variable \in {0,1} based on the probabilty of usrpref_j
-#    - Sample from user preferences whether they "accept" the item
-#    - Update arms/resources available
-#    - Update BLR or other context regression algorithm
-#    - Evaluate per episode regret (Here we're going to focus on instantaneous regret)
-
 
 class OnlineLogisticRegression:
     '''
@@ -237,44 +219,6 @@ class DandR_Environment:
             self._update_arm_probs(arm)
 
         return reward
-
-    # def fit_BLR(self, X=None, y=None, init=False):
-        # ''' Method to fit reward estimates for each arm '''
-
-        # if init:
-        #     # Initialize the separate Bayesian Linear Models for each arm and extract training data
-        #     self.model = []
-        #     batch = onp.vstack(self.batch)
-        #     X, y = [], []
-        #     for ii in range(self.num_arms):
-        #         self.model.append(OnlineLogisticRegression(self.blr_lambda, self.blr_alpha, self.blr_dx))
-
-        #         X.append( onp.hstack([ onp.ones( (sum(batch[:,-2]==ii),1) ) , batch[batch[:,-2]==ii,:self.blr_dx-1] ]) )
-        #         y.append(batch[batch[:,-2]==ii,-1])
-
-        # else:
-        #     # Create training data (if not provided)
-        #     if X is None:
-        #         batch = onp.vstack(self.batch)
-        #         X, y = [], []
-        #         for ii in range(self.num_arms):
-        #             X.append( onp.hstack([ onp.ones( (sum(batch[:,-2]==ii),1) ), batch[batch[:,-2]==ii,:self.blr_dx-1] ]) )
-        #             y.append(batch[batch[:,-2]==ii,-1])
-
-        # # Fit the separate Bayesian Linear Models for each arm
-        # for ii in range(self.num_arms):
-            
-        #     self.model[ii].fit(X[ii],y[ii])
-
-    # def predict_arms(self,X_test, mode='sample'):
-        ''' Predicts arm probabilies '''
-        # probs = []
-        # X_test = onp.insert(X_test,0,1)[onp.newaxis,:]
-        # for ii in range(self.num_arms):
-        #     temp = self.model[ii].predict_proba(X_test, mode=mode)
-        #     probs.append(temp[0,1])
-
-        # return probs / onp.sum(probs)
 
     def _model(self, X=None, Y=None,predict=False):
         if predict:
