@@ -127,12 +127,19 @@ class DandR_Environment:
         self.context = np.zeros(num_arms)
 
         # Set initialization for BNN parameters
-        self.blr_dx = num_arms # Input dimensions
-        self.blr_dy = 1 # Size of output dimensions
+        self.blr_dx = num_arms+1 # Input dimensions
+        self.blr_alpha = 0.9
+        self.blr_lambda = 0.01 
         self.num_samples = 1000 # Number of BLR Samples
 
         self.decay_rate = 1-decay_rate
         self.recovery_rate = 1+recovery_rate
+
+        self.batch = []
+
+        self._reset()
+        self._initialize_batch_of_data()
+        self._reset()
 
     
     def _update_context(self,arm=0):
@@ -153,6 +160,21 @@ class DandR_Environment:
         self.arm_probs = np.copy(self.init_probs)
         self.context = np.zeros(self.num_arms)
     
+    def _initialize_batch_of_data(self,num_iters=1000):
+        '''
+        This method pulls arms randomly for 'num_iters' rounds 
+        to fit a BLR to predict the reward for each arm. 
+
+        Batch of data is a list of tuples (context, action, reward)
+        '''
+        
+        for __ in range(num_iters):
+            # Randomly sample an action/arm to pull
+            curr_action = npr.choice(range(self.num_arms))
+            # Pull arm
+            __ = self.pull_arm(arm=curr_action)
+
+    
     def pull_arm(self,arm=0):
         ''' Method for pulling, returning reward and updating arms + context '''
         # Evaluate if pull is successful with user's specific bernoulli prob for the chosen item
@@ -163,13 +185,65 @@ class DandR_Environment:
             reward = 1
         else: # Pull was unsuccessful
             reward = 0
+
+        # Record round
+        curr_context = np.copy(self.context)
+        self.batch.append([*curr_context,arm,reward])
         
-        # Update arm's context and 
+        # Update all arm contexts and probabilities
         self._update_context(arm)
         self._update_arm_probs(arm)
 
         return reward
 
+    def fit_BLR(self, X=None, y=None, init=False):
+        ''' Method to fit reward estimates for each arm '''
 
+        if init:
+            # Initialize the separate Bayesian Linear Models for each arm and extract training data
+            self.model = []
+            batch = np.vstack(self.batch)
+            X, y = [], []
+            for ii in range(self.num_arms):
+                self.model.append(OnlineLogisticRegression(self.blr_lambda, self.blr_alpha, self.blr_dx))
 
+                X.append( np.hstack([np.ones((len(self.batch),1)),batch[batch[:,-2]==ii,:self.num_arms]]) )
+                y.append(batch[batch[:,-2]==ii,-1])
 
+        else:
+            # Create training data (if not provided)
+            if X is None:
+                batch = np.vstack(self.batch)
+                X, y = [], []
+                for ii in range(self.num_arms):
+                    X.append( np.hstack([np.ones((len(self.batch),1)),batch[batch[:,-2]==ii,:self.num_arms]]) )
+                    y.append(batch[batch[:,-2]==ii,-1])
+
+        # Fit the separate Bayesian Linear Models for each arm
+        for ii in range(self.num_arms):
+            
+            self.model[ii].fit(X[ii],y[ii])
+
+    def predict_arms(self,X_test, mode='sample'):
+        ''' Predicts arm probabilies '''
+        probs = []
+        X_test = np.insert(X_test,0,1)[np.newaxis,:]
+        for ii in range(self.num_arms):
+            probs.append(self.model[ii].predict_proba(X_test, mode=mode))
+
+        return probs
+
+    def ts_blr_agent(self,X_test):
+        '''
+        Agent that utilizes BLR prediction of expected rewards to choose from a la Thompson Sampling
+        '''
+        # Predict expected values of reward (per bin) via BNN
+        value_probs = self.predict_arms(X_test)
+        # Return action that has the highest expected return
+        return np.argmax(value_probs)
+
+    def oracle(self, X_test):
+        '''
+        Oracle that returns the current best arm
+        '''
+        return np.argmax(self.arm_probs)
