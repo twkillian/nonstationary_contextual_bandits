@@ -241,7 +241,7 @@ class Bandit_Resource_Environment:
         return model_trace['Y']['value']
     
     
-    def fit_bnn_predictor(self, rng_key):
+    def fit_predictor(self, rng_key):
         N, D_X, D_H = len(self.batch), self.bnn_dx, self.bnn_dh
         
         # Extract training data
@@ -281,7 +281,7 @@ class Bandit_Resource_Environment:
         '''
         return onp.random.choice(range(self.num_bins))
 
-    def ts_bnn_agent(self, predict_rng_key, X):
+    def ts_bayes_agent(self, predict_rng_key, X):
         '''
         Agent that utilizes BNN prediction of expected rewards to choose from a la Thompson Sampling
         '''

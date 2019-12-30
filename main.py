@@ -34,10 +34,10 @@ Notes:
 
 4 Nov 2019 -- Algorithm ideas:
             One potential idea is EWS: https://twitter.com/eigenikos/status/1191279528875741185?s=20
-            Another idea is Rexp3 from [1] above -- There may need to be some adjustments made to make this "contextual"
-            SWA for the Non-parametric case presented in [2]
-            FEWA from [3]
-            Consider adding in fatigue terms as done in [6]
+            - Another idea is Rexp3 from [1] above -- There may need to be some adjustments made to make this "contextual"
+            - SWA for the Non-parametric case presented in [2]
+            - FEWA from [3]
+            X - Consider adding in fatigue terms as done in [6] -- (Dec 29--Added by including rolling window of how often each arm has been pulled, included in the context...)
 
 11 Nov 2019 -- Further notes:
             It's pretty clear that [1-3] are non-contextual settings. One potential contribution that I can make is in applying 
@@ -77,47 +77,60 @@ import itertools
 import jax.random as random
 import jax.numpy as np
 
-from resource_environment import Bandit_Resource_Environment
+import numpy.random as npr
+
+# from resource_environment import Bandit_Resource_Environment
+from decay_and_recovery_environment import DandR_Environment
 
 
-def main(env,agent,agent_type,oracle,num_iters,rstk_per,rstk_fq,bnn_fq,rng_keys,prng_keys):
+def main(env,agent,agent_type,oracle,num_iters,refit_fq,rng_trainers,rng_testers):
     # Main wrapper function for running bandit algorithms
     # Loop over the specified number of iterations with the provided agent (random or TS-BNN or ---)
     #   Record regret (oracle - received reward) over the experiment, report and save
 
-    times_bnn_fit = 1 # Track the number of times the BNN has been fit (only for dealing with RNG Keys for BNN training)
+    times_fit = 1 # Track the number of times the BNN has been fit (only for dealing with RNG Keys for BNN training)
+
+    # Train a BNN for each action if needed
+    if agent_type != 'random':
+        env.fit_predictor(rng_trainers[0])
 
     regret = onp.zeros(num_iters)
-    for itr in np.arange(1,num_iters):
+    for itr in onp.arange(num_iters):
         # Sample new context
-        usr_idx, usr_cntxt = env.sample_new_user()
+        # usr_idx, usr_cntxt = env.sample_new_user()
+        cntxt = onp.insert(env.get_context(),0,1)[np.newaxis,:]
         # Get current resources avail
-        resources_avail = onp.copy(env.resources_avail) + 1e-4 * onp.random.random()
+        # resources_avail = onp.copy(env.resources_avail) + 1e-4 * onp.random.random()
         # Create new query point
-        x_test = onp.insert(resources_avail,0,usr_cntxt)[np.newaxis,:]
+        # x_test = onp.insert(resources_avail,0,usr_cntxt)[np.newaxis,:]
 
         # Get action from agent
-        action = agent(prng_keys[itr],x_test)
+        # action = agent(rng_testers[itr],x_test)
+        action = agent(rng_testers[0],cntxt)
         # Get oracle action
-        o_act = oracle(usr_idx,x_test)
+        # o_act = oracle(usr_idx,x_test)
+        o_act = oracle(cntxt)
 
         # Take step in env and get reward
-        a_rew = env.pull_arm(usr_idx,execute=True,arm=action)
+        # a_rew = env.pull_arm(usr_idx, execute=True, arm=action)
+        a_rew = env.pull_arm(execute=True, arm=action)
         # Get oracle reward
-        o_rew = env.pull_arm(usr_idx,execute=False,arm=o_act)
+        # o_rew = env.pull_arm(usr_idx, execute=False, arm=o_act)
+        o_rew = env.pull_arm(execute=False, arm=o_act)
+        print(f"{agent_type} Action: {action}, Oracle Action: {o_act}, {agent_type} Reward: {a_rew}, Oracle Reward: {o_rew}, Regret: {o_rew-a_rew}")
 
         # Record the regret
         regret[itr] = regret[itr-1] + (o_rew-a_rew)
 
         # Add experience to the batch
-        env.batch.append(onp.array([usr_idx,usr_cntxt,*resources_avail,action,a_rew]))
+        # env.batch.append(onp.array([usr_idx,usr_cntxt,*resources_avail,action,a_rew]))
 
-        if itr % rstk_fq == 0:
-            env.restock(fill_type=rstk_per)
+        # if itr % rstk_fq == 0:
+        #     env.restock(fill_type=rstk_per)
 
-        if (agent_type == 'ts_bnn') and (itr % bnn_fq == 0):
-            env.fit_bnn_predictor(rng_keys[times_bnn_fit])
-            times_bnn_fit += 1
+        if (agent_type == 'ts_bayes') and ((itr+1) % refit_fq == 0):
+            env.fit_predictor(rng_trainers[0])
+            times_fit += 1
 
 
     return regret
@@ -132,45 +145,72 @@ if __name__ == '__main__':
     #    -- Oracle needs to take into account non-zero resources
     #    -- Define number of iterations, frequency and rate of restocking as well as refitting of BNNs
     
-    # = Meta parameters for experiments =
-    n_bins = 3
-    tot_items=300
-    n_train_iters = 200
-    n_train_pulls = 3
-    num_iterations = 5000
+    # = Meta parameters for experiments = "Resource Env"
+    # n_bins = 3
+    # tot_items=300
+    # n_train_iters = 200
+    # n_train_pulls = 3
+    # num_iterations = 5000
+    # restock_percent = 0.5
+    # restock_freq = 300
 
-    restock_percent = 0.5
-    restock_freq = 300
+    # bnn_refit_freq = 100
 
-    bnn_refit_freq = 100
+    # env_type = 'resource'
 
-    agent_type = 'ts_bnn'
+    # = Meta parameters for experiments = "Decay and Recovery Env"
+    n_arms = 3
+    n_train_iters = 100
+    num_iterations = 2500
+    agg_window = 50
+
+    refit_freq = 50
+
+    env_type = 'decay'
+
+    dandr_rates = {'slow':0.05,'moderate':0.10,'fast':0.25}
+    decay_type = 'fast'
+    recovery_type = 'fast'
+
+    reward_center = 0.65
+    random_seed = 2
+    npr.seed(random_seed)
+    init_values = npr.normal(loc=reward_center,scale=0.1,size=n_arms)
+
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    
+
+    # agent_type = 'ts_bayes'
+    agent_type = 'random'
 
     # == Create RNG Keys == 
     rng_trainers = random.split(random.PRNGKey(1234),50)
     rng_testers = random.split(random.PRNGKey(2334),5000)
 
     # === Initialize the environment ===
-    env = Bandit_Resource_Environment(
-                                        random_state=1234,
-                                        num_users=1000,
-                                        num_bins=n_bins,
-                                        bin_values=[1.0]*n_bins,
-                                        tot_init_items=tot_items)
+    # env = Bandit_Resource_Environment(
+    #                                     random_state=1234,
+    #                                     num_users=1000,
+    #                                     num_bins=n_bins,
+    #                                     bin_values=[1.0]*n_bins,
+    #                                     tot_init_items=tot_items)
     # Initialize a batch of data from the environment to train BNNs with
-    train_batch = env.initialize_batch_of_data(num_iters=n_train_iters, num_pulls_per_user=n_train_pulls)
-    # Train a BNN for each action if needed
-    if agent_type != 'random':
-        env.fit_bnn_predictor(rng_trainers[0])
+    # train_batch = env.initialize_batch_of_data(num_iters=n_train_iters, num_pulls_per_user=n_train_pulls)
     # Restock env to get started
-    env.restock()
-
-
+    # env.restock()
+    
+    env = DandR_Environment(num_arms=n_arms,
+                            init_values=init_values,
+                            decay_rate=dandr_rates[decay_type],
+                            recovery_rate=dandr_rates[recovery_type],
+                            experiment_iters=num_iterations,
+                            agg_window=agg_window)
+    
     # ==== Initialize Agents + Oracle ====
     if agent_type == 'random':
-        agent = env.randomized_agent
-    elif agent_type == 'ts_bnn':
-        agent = env.ts_bnn_agent
+        agent = env.random_agent
+    elif agent_type == 'ts_bayes':
+        agent = env.ts_bayes_agent
     else:
         print("Specified agent type hasn't been implemented")
     
@@ -183,10 +223,10 @@ if __name__ == '__main__':
                     agent_type,
                     oracle,
                     num_iterations,
-                    restock_percent,restock_freq,
-                    bnn_refit_freq,
-                    rng_trainers,rng_testers)
+                    refit_freq,
+                    rng_trainers,
+                    rng_testers)
     # Save regret
-    onp.save(f'{agent_type}_regret.npy', onp.array(regret))
+    onp.save(f'regrets/regret_{env_type}_{agent_type}_{n_arms}arms_{num_iterations}iters_{refit_freq}fitfreq_{decay_type}decay_{recovery_type}recovery_{timestamp}.npy', onp.array(regret))
 
 
