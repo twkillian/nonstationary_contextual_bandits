@@ -161,7 +161,7 @@ if __name__ == '__main__':
     # env_type = 'resource'
 
     # = Meta parameters for experiments = "Decay and Recovery Env"
-    n_arms = 3
+    n_arms = 10
     n_train_iters = 100
     num_iterations = 2500
     agg_window = 50
@@ -171,7 +171,7 @@ if __name__ == '__main__':
     env_type = 'decay'
 
     dandr_rates = {'slow':0.05,'moderate':0.10,'fast':0.25}
-    decay_type = 'slow'
+    decay_type = 'fast'
     recovery_type = 'fast'
 
     reward_center = 0.65

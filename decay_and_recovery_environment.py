@@ -156,11 +156,13 @@ class DandR_Environment:
     def _model(self, X=None, Y=None,predict=False):
         if predict:
             pass
+        # Sample the regression coefficients (including the intercept)
         betas = numpyro.sample('betas', dist.MultivariateNormal(loc=np.zeros(X.shape[1]), covariance_matrix = 5*np.eye(X.shape[1])) )
+        # Sample some noise and variance for the final prediction
         sigma = numpyro.sample('sigma', dist.Exponential(1.))
-        
+        # Take the inner product of the context and the sampled regression coefficients
         mu = np.matmul(X,betas)
-
+        # Take the posterior sample of inferred rewards
         numpyro.sample('obs', dist.Normal(mu,sigma), obs=Y)
 
     def _run_inference(self,rng_key=None,X=None,Y=None):
@@ -174,6 +176,7 @@ class DandR_Environment:
         else:
             rng_key, rng_key_ = random.split(rng_key)
         
+        # The following samples parameter settings with NUTS and MCMC to fit the posterior based on the provided data (X,Y)
         start = time.time()
         kernel = NUTS(self._model)
         mcmc = MCMC(kernel,self.num_warmup,self.num_samples)
@@ -192,24 +195,25 @@ class DandR_Environment:
 
     def fit_predictor(self, rng_key):
 
-        # Extract training data
+        # Extract training data for each arm.
         batch = onp.vstack(self.batch)
         X, y = [], []
         for ii in range(self.num_arms):
             X.append( onp.hstack([ onp.ones( (sum(batch[:,-2]==ii),1) ) , batch[batch[:,-2]==ii,:self.blr_dx-1] ]) )
             y.append(batch[batch[:,-2]==ii,-1])
         
+        # Fit a posterior for each arm
         post_samples = []
         for ii in range(self.num_arms):
             post_samples.append(self._run_inference(rng_key, X[ii],y[ii]))
-
-
+        
+        # Save out the posteriors for future predictions.
         self.blr_samples = post_samples
 
     def predict_values(self, predict_rng_key, X):
 
         value_predictions = []
-
+        # Infer the rewards for each arm using the stored posterior distributions
         for ii in range(self.num_arms):
             vmap_args = (self.blr_samples[ii], random.split(predict_rng_key, self.num_samples*self.num_chains))
             prediction = vmap(lambda samples, rng_key: self._blr_predict(rng_key,samples,X,predict=True))(*vmap_args)
