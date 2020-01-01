@@ -44,7 +44,7 @@ class DandR_Environment:
     class description incoming
     '''
 
-    def __init__(self, num_arms=3, init_values=[1.0,1.0,1.0], decay_rate=0.05, recovery_rate=0.05, num_init_draws=350, experiment_iters=5000, agg_window=50, random_state = 1234, num_chains = 1, num_samples=1000, num_warmup = 500):
+    def __init__(self, num_arms=3, init_values=[1.0,1.0,1.0], decay_rate=0.05, recovery_rate=0.05, num_init_draws=300, experiment_iters=5000, agg_window=50, random_state = 1234, num_chains = 1, num_samples=1000, num_warmup = 500):
         
         self.num_chains = num_chains
         self.random_state = random_state
@@ -60,8 +60,6 @@ class DandR_Environment:
 
         # Set initialization for BNN parameters
         self.blr_dx = 2*num_arms+1 # Input dimensions
-        self.blr_alpha = 0.9
-        self.blr_lambda = 0.01 
 
         self.decay_rate = 1-decay_rate
         self.recovery_rate = 1+recovery_rate
@@ -219,7 +217,7 @@ class DandR_Environment:
             prediction = vmap(lambda samples, rng_key: self._blr_predict(rng_key,samples,X,predict=True))(*vmap_args)
             # Take mean of prediction samples to provide prediction for this model
             pred = np.mean(prediction,axis=0)
-            # Append prediction to output list
+            # Append prediction prob (passed through the sigmoid function) to output list
             proba = 1 / (1 + onp.exp(-1 * pred))
             value_predictions.append(proba)
 

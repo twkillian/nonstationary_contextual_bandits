@@ -150,7 +150,7 @@ if __name__ == '__main__':
     # = Meta parameters for experiments = "Resource Env"
     # n_bins = 3
     # tot_items=300
-    # n_train_iters = 200
+    # init_batch_size = 200
     # n_train_pulls = 3
     # num_iterations = 5000
     # restock_percent = 0.5
@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     # = Meta parameters for experiments = "Decay and Recovery Env"
     n_arms = 10
-    n_train_iters = 100
+    init_batch_size = 1000
     num_iterations = 2500
     agg_window = 50
 
@@ -182,8 +182,8 @@ if __name__ == '__main__':
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     
 
-    agent_type = 'ts_bayes'
-    # agent_type = 'random'
+    # agent_type = 'ts_bayes'
+    agent_type = 'random'
 
     # == Create RNG Keys == 
     rng_trainers = random.split(random.PRNGKey(1234),50)
@@ -197,12 +197,13 @@ if __name__ == '__main__':
     #                                     bin_values=[1.0]*n_bins,
     #                                     tot_init_items=tot_items)
     # Initialize a batch of data from the environment to train BNNs with
-    # train_batch = env.initialize_batch_of_data(num_iters=n_train_iters, num_pulls_per_user=n_train_pulls)
+    # train_batch = env.initialize_batch_of_data(num_iters=init_batch_size, num_pulls_per_user=n_train_pulls)
     # Restock env to get started
     # env.restock()
     
     env = DandR_Environment(num_arms=n_arms,
                             init_values=init_values,
+                            num_init_draws=init_batch_size,
                             decay_rate=dandr_rates[decay_type],
                             recovery_rate=dandr_rates[recovery_type],
                             experiment_iters=num_iterations,
